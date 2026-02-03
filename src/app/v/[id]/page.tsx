@@ -21,7 +21,7 @@ type ViewState =
       remainingViews: number
       burned: boolean
     }
-  | { status: 'error'; kind: 'not_found' | 'expired' | 'max_views' }
+  | { status: 'error'; kind: 'not_found' | 'expired' | 'max_views' | 'rate_limited' }
 
 function useCountdown(expiresAt: string | null) {
   const [left, setLeft] = useState<number | null>(null)
@@ -99,10 +99,8 @@ export default function ViewPage() {
     const result = await getLinkContent(id)
 
     if ('error' in result) {
-      setState({
-        status: 'error',
-        kind: result.error === 'expired' ? 'expired' : result.error === 'max_views' ? 'max_views' : 'not_found',
-      })
+      const kind = result.code === 429 ? 'rate_limited' : result.error === 'expired' ? 'expired' : result.error === 'max_views' ? 'max_views' : 'not_found'
+      setState({ status: 'error', kind })
       return
     }
 
@@ -127,14 +125,17 @@ export default function ViewPage() {
 
   if (state.status === 'error') {
     const isExpired = state.kind === 'expired' || state.kind === 'max_views'
+    const isRateLimited = state.kind === 'rate_limited'
+    const title = isRateLimited ? t.rateLimitedTitle : isExpired ? t.burned : t.notFound
+    const desc = isRateLimited ? t.rateLimitedDesc : t.burnedDesc
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4">
         <div className="max-w-md w-full text-center space-y-4">
           <div className="inline-flex p-4 rounded-full bg-surface-muted">
             <AlertCircle className="w-12 h-12 text-amber-500" />
           </div>
-          <h1 className="text-xl font-semibold">{isExpired ? t.burned : t.notFound}</h1>
-          <p className="text-text-muted text-sm">{t.burnedDesc}</p>
+          <h1 className="text-xl font-semibold">{title}</h1>
+          <p className="text-text-muted text-sm">{desc}</p>
           <button type="button" onClick={() => router.push('/')} className="px-4 py-2 rounded-xl bg-accent text-white hover:bg-accent-hover transition">
             {t.backHome}
           </button>

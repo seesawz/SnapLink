@@ -3,6 +3,7 @@
 import { headers } from 'next/headers'
 import { nanoid } from 'nanoid'
 import { initDb, createLink as dbCreateLink, getLink, incrementViewAndGetContent } from '@/lib/db'
+import { checkAndConsumeViewContent } from '@/lib/rate-limit'
 
 const MAX_CONTENT_LENGTH = 100_000
 const EXPIRY_OPTIONS: Record<string, number> = {
@@ -18,11 +19,7 @@ export interface CreateLinkResult {
   expiresAt: string | null
 }
 
-export async function createLink(
-  content: string,
-  maxViews: number = 1,
-  expiresIn: 'never' | '5min' | '1hour' | '1day' = '1hour'
-): Promise<CreateLinkResult> {
+export async function createLink(content: string, maxViews: number = 1, expiresIn: 'never' | '5min' | '1hour' | '1day' = '1hour'): Promise<CreateLinkResult> {
   if (typeof content !== 'string' || !content.trim()) {
     throw new Error('Content is required')
   }
@@ -32,10 +29,7 @@ export async function createLink(
   }
 
   const views = Math.min(Math.max(1, Number(maxViews) || 1), 100)
-  const expiresAt =
-    expiresIn === 'never' || !EXPIRY_OPTIONS[expiresIn]
-      ? null
-      : new Date(Date.now() + EXPIRY_OPTIONS[expiresIn])
+  const expiresAt = expiresIn === 'never' || !EXPIRY_OPTIONS[expiresIn] ? null : new Date(Date.now() + EXPIRY_OPTIONS[expiresIn])
 
   await initDb()
 
@@ -111,6 +105,11 @@ export async function getLinkContent(id: string): Promise<LinkContentResult | { 
   }
 
   try {
+    const allowed = await checkAndConsumeViewContent(viewerIp)
+    if (!allowed) {
+      return { error: 'too_many_requests', code: 429 }
+    }
+
     const result = await incrementViewAndGetContent(id, viewerIp)
 
     if (result === 'not_found') {
