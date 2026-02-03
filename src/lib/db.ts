@@ -1,5 +1,7 @@
 import { Pool } from 'pg'
 
+export const DB_NOT_CONFIGURED = 'Database is not configured. Set POSTGRES_URL or DATABASE_URL in .env.local (or Vercel environment variables).'
+
 export type LinkRow = {
   id: string
   content: string
@@ -26,25 +28,18 @@ function getPool(): Pool | null {
   return pool
 }
 
-const memoryStore = new Map<
-  string,
-  {
-    content: string
-    max_views: number
-    view_count: number
-    expires_at: Date | null
-    created_at: Date
-  }
->()
+export function requirePool(): Pool {
+  const p = getPool()
+  if (!p) throw new Error(DB_NOT_CONFIGURED)
+  return p
+}
 
-function useMemory(): boolean {
-  return !connectionString
+export function hasDbConfig(): boolean {
+  return !!connectionString
 }
 
 export async function initDb(): Promise<void> {
-  const p = getPool()
-  if (!p) return
-
+  const p = requirePool()
   await p.query(`
     CREATE TABLE IF NOT EXISTS links (
       id VARCHAR(21) PRIMARY KEY,
@@ -58,19 +53,8 @@ export async function initDb(): Promise<void> {
 }
 
 export async function createLink(id: string, content: string, maxViews: number, expiresAt: Date | null): Promise<void> {
-  if (useMemory()) {
-    memoryStore.set(id, {
-      content,
-      max_views: maxViews,
-      view_count: 0,
-      expires_at: expiresAt,
-      created_at: new Date(),
-    })
-    return
-  }
-
   await initDb()
-  const p = getPool()!
+  const p = requirePool()
   await p.query(
     `INSERT INTO links (id, content, max_views, expires_at)
      VALUES ($1, $2, $3, $4)`,
@@ -79,22 +63,7 @@ export async function createLink(id: string, content: string, maxViews: number, 
 }
 
 export async function getLink(id: string): Promise<LinkRow | null> {
-  if (useMemory()) {
-    const row = memoryStore.get(id)
-    if (!row) return null
-    return {
-      id,
-      content: row.content,
-      max_views: row.max_views,
-      view_count: row.view_count,
-      expires_at: row.expires_at,
-      created_at: row.created_at,
-    }
-  }
-
-  const p = getPool()
-  if (!p) return null
-
+  const p = requirePool()
   const { rows } = await p.query<LinkRow>(
     `SELECT id, content, max_views, view_count, expires_at, created_at
      FROM links WHERE id = $1`,
@@ -112,12 +81,8 @@ export async function getLink(id: string): Promise<LinkRow | null> {
 export type ConsumeResult = { content: string; remainingViews: number; expiresAt: string | null } | 'expired' | 'max_views' | 'not_found'
 
 async function deleteLink(id: string): Promise<void> {
-  if (useMemory()) {
-    memoryStore.delete(id)
-    return
-  }
-  const p = getPool()
-  if (p) await p.query('DELETE FROM links WHERE id = $1', [id])
+  const p = requirePool()
+  await p.query('DELETE FROM links WHERE id = $1', [id])
 }
 
 export async function incrementViewAndGetContent(id: string): Promise<ConsumeResult> {
@@ -135,20 +100,7 @@ export async function incrementViewAndGetContent(id: string): Promise<ConsumeRes
   }
 
   const newCount = link.view_count + 1
-
-  if (useMemory()) {
-    const row = memoryStore.get(id)
-    if (!row) return 'not_found'
-    row.view_count = newCount
-    if (newCount >= link.max_views) memoryStore.delete(id)
-    return {
-      content: link.content,
-      remainingViews: link.max_views - newCount,
-      expiresAt: link.expires_at ? new Date(link.expires_at).toISOString() : null,
-    }
-  }
-
-  const p = getPool()!
+  const p = requirePool()
   await p.query('UPDATE links SET view_count = $1 WHERE id = $2', [newCount, id])
 
   const remainingViews = link.max_views - newCount
@@ -159,12 +111,4 @@ export async function incrementViewAndGetContent(id: string): Promise<ConsumeRes
     remainingViews,
     expiresAt: link.expires_at ? new Date(link.expires_at).toISOString() : null,
   }
-}
-
-export function isUsingMemory(): boolean {
-  return useMemory()
-}
-
-export function getMemoryStoreSize(): number {
-  return useMemory() ? memoryStore.size : 0
 }

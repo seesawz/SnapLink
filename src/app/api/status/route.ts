@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
-import { isUsingMemory, getMemoryStoreSize, initDb } from '@/lib/db'
+import { hasDbConfig, initDb, DB_NOT_CONFIGURED } from '@/lib/db'
 
 export async function GET() {
-  if (isUsingMemory()) {
-    return NextResponse.json({
-      storage: 'memory',
-      memoryLinksCount: getMemoryStoreSize(),
-    })
+  if (!hasDbConfig()) {
+    return NextResponse.json(
+      {
+        storage: 'none',
+        error: DB_NOT_CONFIGURED,
+      },
+      { status: 503 }
+    )
   }
 
   try {
