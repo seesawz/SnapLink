@@ -28,11 +28,12 @@ export async function POST(request: NextRequest) {
     await initDb()
 
     const id = nanoid(21)
-    await createLink(id, content.trim(), views, expiresAt)
+    const { key } = await createLink(id, content.trim(), views, expiresAt)
 
     return NextResponse.json({
       id,
       url: `${request.nextUrl.origin}/v/${id}`,
+      key,
       maxViews: views,
       expiresAt: expiresAt?.toISOString() ?? null,
     })

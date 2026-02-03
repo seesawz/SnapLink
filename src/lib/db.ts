@@ -70,7 +70,7 @@ export async function initDb(): Promise<void> {
   `)
 }
 
-export async function createLink(id: string, content: string, maxViews: number, expiresAt: Date | null): Promise<void> {
+export async function createLink(id: string, content: string, maxViews: number, expiresAt: Date | null): Promise<{ key: string }> {
   await initDb()
   const p = requirePool()
   const linkKey = randomLinkKey()
@@ -81,6 +81,7 @@ export async function createLink(id: string, content: string, maxViews: number, 
      VALUES ($1, $2, $3, $4, $5)`,
     [id, ciphertext, contentKeyEnc, maxViews, expiresAt ? expiresAt.toISOString() : null]
   )
+  return { key: linkKey.toString('hex') }
 }
 
 export async function getLink(id: string): Promise<LinkRow | null> {
@@ -99,7 +100,7 @@ export async function getLink(id: string): Promise<LinkRow | null> {
   }
 }
 
-export type ConsumeResult = { content: string; key: string; remainingViews: number; expiresAt: string | null } | 'expired' | 'max_views' | 'not_found'
+export type ConsumeResult = { content: string; remainingViews: number; expiresAt: string | null } | 'expired' | 'max_views' | 'not_found'
 
 async function deleteLink(id: string): Promise<void> {
   const p = requirePool()
@@ -126,11 +127,9 @@ export async function incrementViewAndGetContent(id: string, viewerIp: string): 
   const { rows: viewRows } = await p.query<{ link_id: string }>(`SELECT 1 FROM link_views WHERE link_id = $1 AND viewer_ip = $2`, [id, ip])
   const alreadyViewed = viewRows.length > 0
 
-  const keyHex = link.content_key ? decryptKeyWithMaster(link.content_key).toString('hex') : ''
   const remainingViews = link.max_views - link.view_count
   const payload = {
     content: link.content,
-    key: keyHex,
     remainingViews,
     expiresAt: link.expires_at ? new Date(link.expires_at).toISOString() : null,
   }

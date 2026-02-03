@@ -20,7 +20,7 @@ type ViewState =
       remainingViews: number
       burned: boolean
     }
-  | { status: 'error'; kind: 'not_found' | 'expired' | 'max_views' }
+  | { status: 'error'; kind: 'not_found' | 'expired' | 'max_views' | 'no_key' }
 
 function useCountdown(expiresAt: string | null) {
   const [left, setLeft] = useState<number | null>(null)
@@ -96,6 +96,13 @@ export default function ViewPage() {
   }, [id, fetchMeta])
 
   async function handleViewContent() {
+    const { getLinkKey } = await import('@/lib/link-keys')
+    const localKey = getLinkKey(id)
+    if (!localKey) {
+      setState({ status: 'error', kind: 'no_key' })
+      return
+    }
+
     const res = await fetch(`/api/links/${id}`)
     const data = await res.json()
 
@@ -111,16 +118,14 @@ export default function ViewPage() {
       return
     }
 
-    let plainContent = data.content
-    if (data.key) {
-      try {
-        const { decryptContent } = await import('@/lib/decrypt')
-        plainContent = await decryptContent(data.content, data.key)
-      } catch (e) {
-        console.error('Decrypt failed', e)
-        setState({ status: 'error', kind: 'not_found' })
-        return
-      }
+    let plainContent: string
+    try {
+      const { decryptContent } = await import('@/lib/decrypt')
+      plainContent = await decryptContent(data.content, localKey)
+    } catch (e) {
+      console.error('Decrypt failed', e)
+      setState({ status: 'error', kind: 'not_found' })
+      return
     }
 
     setState({
@@ -144,14 +149,15 @@ export default function ViewPage() {
 
   if (state.status === 'error') {
     const isExpired = state.kind === 'expired' || state.kind === 'max_views'
+    const isNoKey = state.kind === 'no_key'
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4">
         <div className="max-w-md w-full text-center space-y-4">
           <div className="inline-flex p-4 rounded-full bg-surface-muted">
             <AlertCircle className="w-12 h-12 text-amber-500" />
           </div>
-          <h1 className="text-xl font-semibold">{isExpired ? t.burned : t.notFound}</h1>
-          <p className="text-text-muted text-sm">{t.burnedDesc}</p>
+          <h1 className="text-xl font-semibold">{isNoKey ? t.noKeyTitle : isExpired ? t.burned : t.notFound}</h1>
+          <p className="text-text-muted text-sm">{isNoKey ? t.noKeyDesc : t.burnedDesc}</p>
           <button type="button" onClick={() => router.push('/')} className="px-4 py-2 rounded-xl bg-accent text-white hover:bg-accent-hover transition">
             {t.backHome}
           </button>

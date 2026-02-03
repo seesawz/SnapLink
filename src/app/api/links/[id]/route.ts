@@ -37,7 +37,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({
       content: result.content,
-      key: result.key,
       remainingViews: result.remainingViews,
       expiresAt: result.expiresAt,
       burned: result.remainingViews <= 0,

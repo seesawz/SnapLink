@@ -39,6 +39,10 @@ export default function HomePage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed')
+      if (data.key && data.id) {
+        const { setLinkKey } = await import('@/lib/link-keys')
+        setLinkKey(data.id, data.key)
+      }
       setResult({
         url: data.url,
         id: data.id,
