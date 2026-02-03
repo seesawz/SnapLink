@@ -37,7 +37,14 @@ export async function POST(request: NextRequest) {
       expiresAt: expiresAt?.toISOString() ?? null,
     })
   } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
     console.error('Create link error:', e)
+    if (message.includes('ENCRYPTION_KEY')) {
+      return NextResponse.json({ error: 'Server configuration error: ENCRYPTION_KEY is not set. Add it in Vercel Environment Variables.' }, { status: 503 })
+    }
+    if (message.includes('Database is not configured') || message.includes('POSTGRES')) {
+      return NextResponse.json({ error: 'Server configuration error: Database (POSTGRES_URL) is not configured.' }, { status: 503 })
+    }
     return NextResponse.json({ error: 'Failed to create link' }, { status: 500 })
   }
 }
