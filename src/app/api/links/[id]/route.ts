@@ -1,14 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getLink, incrementViewAndGetContent } from '@/lib/db'
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+function getClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for')
+  if (forwarded) {
+    const first = forwarded.split(',')[0]?.trim()
+    if (first) return first
+  }
+  const real = request.headers.get('x-real-ip')
+  if (real) return real.trim()
+  return 'unknown'
+}
+
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   if (!id) {
     return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
   }
 
+  const viewerIp = getClientIp(request)
+
   try {
-    const result = await incrementViewAndGetContent(id)
+    const result = await incrementViewAndGetContent(id, viewerIp)
 
     if (result === 'not_found') {
       return NextResponse.json({ error: 'not_found', message: 'Link not found or no longer valid' }, { status: 404 })

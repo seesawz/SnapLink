@@ -111,9 +111,21 @@ export default function ViewPage() {
       return
     }
 
+    let plainContent = data.content
+    if (data.key) {
+      try {
+        const { decryptContent } = await import('@/lib/decrypt')
+        plainContent = await decryptContent(data.content, data.key)
+      } catch (e) {
+        console.error('Decrypt failed', e)
+        setState({ status: 'error', kind: 'not_found' })
+        return
+      }
+    }
+
     setState({
       status: 'content',
-      content: data.content,
+      content: plainContent,
       remainingViews: data.remainingViews ?? 0,
       burned: data.burned ?? false,
     })

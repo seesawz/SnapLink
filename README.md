@@ -45,20 +45,16 @@ npm run dev
 | 变量                             | 说明                                    |
 | -------------------------------- | --------------------------------------- |
 | `POSTGRES_URL` 或 `DATABASE_URL` | Postgres 连接串（必填，否则应用会报错） |
+| `ENCRYPTION_KEY`                 | 内容加密密钥（必填，32 字节 hex）       |
 
-示例（Neon）：
-
-```
-POSTGRES_URL=postgresql://user:password@host/verceldb?sslmode=require
-```
-
-本地开发使用 `.env.development.local`，部署到 Vercel 时在项目 **Settings → Environment Variables** 中配置同名变量。
+- **ENCRYPTION_KEY**：用于对链接内容 AES-256-GCM 加密后存库，未配置时创建/查看链接会报错。生成示例：`openssl rand -hex 32`。密钥丢失则旧密文无法解密，请妥善保管。
+- 本地开发使用 `.env.development.local`，部署到 Vercel 时在项目 **Settings → Environment Variables** 中配置同名变量。
 
 ## 数据库
 
 - 使用 **Neon** 或任意 Postgres 均可。
-- 表名：`links`，首次创建链接或访问 `/api/status` 时会自动建表。
-- 在 Neon Console 中选对 **Branch** 和 **数据库名**（如 `verceldb`），在 SQL Editor 执行 `SELECT * FROM public.links;` 可查看数据。
+- 表：`links`（内容以密文存储）、`link_views`（link_id + viewer_ip，用于同 IP 只计一次查看）。首次创建链接或访问 `/api/status` 时会自动建表。
+- 同 IP 限制：每个链接下同一 IP 只扣 1 次查看次数，同一 IP 再次打开仍返回内容但不增加次数；IP 取自 `x-forwarded-for` / `x-real-ip`，用于防刷与计次。
 
 ## 部署到 Vercel
 
@@ -86,7 +82,8 @@ src/
 │   ├── LangProvider.tsx     # 中/英切换
 │   └── DonateModal.tsx      # 打赏弹窗
 └── lib/
-    ├── db.ts                # Postgres 连接与 links 表读写
+    ├── crypto.ts            # 内容 AES-256-GCM 加解密（ENCRYPTION_KEY）
+    ├── db.ts                # Postgres、links/link_views、加密存解密读与同 IP 只计一次
     ├── donate-config.ts     # 打赏链接/收款码配置
     └── messages.ts          # 中英文文案
 ```
