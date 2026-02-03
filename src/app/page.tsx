@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useLang } from '@/components/LangProvider'
 import { DonateModal } from '@/components/DonateModal'
 import { Lock, Link2, Copy, Check, Heart } from 'lucide-react'
+import { createLink } from '@/lib/actions'
 
 type ExpiresIn = 'never' | '5min' | '1hour' | '1day'
 
@@ -28,23 +29,9 @@ export default function HomePage() {
     setLoading(true)
     setResult(null)
     try {
-      const res = await fetch('/api/links', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: content.trim(),
-          maxViews,
-          expiresIn,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed')
-      if (data.key && data.id) {
-        const { setLinkKey } = await import('@/lib/link-keys')
-        setLinkKey(data.id, data.key)
-      }
+      const data = await createLink(content.trim(), maxViews, expiresIn)
       setResult({
-        url: data.url,
+        url: `${window.location.origin}${data.url}`,
         id: data.id,
         maxViews: data.maxViews,
         expiresAt: data.expiresAt,

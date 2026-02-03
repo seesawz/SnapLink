@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useLang } from '@/components/LangProvider'
 import { Lock, Eye, AlertCircle, Clock } from 'lucide-react'
+import { getLinkMeta, getLinkContent } from '@/lib/actions'
 
 type Meta = {
   remainingViews: number
@@ -20,7 +21,7 @@ type ViewState =
       remainingViews: number
       burned: boolean
     }
-  | { status: 'error'; kind: 'not_found' | 'expired' | 'max_views' | 'no_key' }
+  | { status: 'error'; kind: 'not_found' | 'expired' | 'max_views' }
 
 function useCountdown(expiresAt: string | null) {
   const [left, setLeft] = useState<number | null>(null)
@@ -63,29 +64,28 @@ export default function ViewPage() {
   const countdownSeconds = useCountdown(metaExpiresAt)
 
   const fetchMeta = useCallback(async () => {
-    const res = await fetch(`/api/links/${id}/meta`)
-    const data = await res.json()
-    if (res.status === 404) {
-      setState({ status: 'error', kind: 'not_found' })
-      return
-    }
-    if (res.status === 410) {
-      setState({
-        status: 'error',
-        kind: data.error === 'expired' ? 'expired' : 'max_views',
-      })
-      return
-    }
-    if (!res.ok) {
+    const result = await getLinkMeta(id)
+    if ('error' in result) {
+      if (result.code === 404) {
+        setState({ status: 'error', kind: 'not_found' })
+        return
+      }
+      if (result.code === 410) {
+        setState({
+          status: 'error',
+          kind: result.error === 'expired' ? 'expired' : 'max_views',
+        })
+        return
+      }
       setState({ status: 'error', kind: 'not_found' })
       return
     }
     setState({
       status: 'meta',
       meta: {
-        remainingViews: data.remainingViews,
-        maxViews: data.maxViews,
-        expiresAt: data.expiresAt,
+        remainingViews: result.remainingViews,
+        maxViews: result.maxViews,
+        expiresAt: result.expiresAt,
       },
     })
   }, [id])
@@ -96,43 +96,21 @@ export default function ViewPage() {
   }, [id, fetchMeta])
 
   async function handleViewContent() {
-    const { getLinkKey } = await import('@/lib/link-keys')
-    const localKey = getLinkKey(id)
-    if (!localKey) {
-      setState({ status: 'error', kind: 'no_key' })
-      return
-    }
+    const result = await getLinkContent(id)
 
-    const res = await fetch(`/api/links/${id}`)
-    const data = await res.json()
-
-    if (res.status === 404 || res.status === 410) {
+    if ('error' in result) {
       setState({
         status: 'error',
-        kind: data.error === 'expired' ? 'expired' : 'max_views',
+        kind: result.error === 'expired' ? 'expired' : result.error === 'max_views' ? 'max_views' : 'not_found',
       })
-      return
-    }
-    if (!res.ok) {
-      setState({ status: 'error', kind: 'not_found' })
-      return
-    }
-
-    let plainContent: string
-    try {
-      const { decryptContent } = await import('@/lib/decrypt')
-      plainContent = await decryptContent(data.content, localKey)
-    } catch (e) {
-      console.error('Decrypt failed', e)
-      setState({ status: 'error', kind: 'not_found' })
       return
     }
 
     setState({
       status: 'content',
-      content: plainContent,
-      remainingViews: data.remainingViews ?? 0,
-      burned: data.burned ?? false,
+      content: result.content,
+      remainingViews: result.remainingViews,
+      burned: result.burned,
     })
   }
 
@@ -149,15 +127,14 @@ export default function ViewPage() {
 
   if (state.status === 'error') {
     const isExpired = state.kind === 'expired' || state.kind === 'max_views'
-    const isNoKey = state.kind === 'no_key'
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4">
         <div className="max-w-md w-full text-center space-y-4">
           <div className="inline-flex p-4 rounded-full bg-surface-muted">
             <AlertCircle className="w-12 h-12 text-amber-500" />
           </div>
-          <h1 className="text-xl font-semibold">{isNoKey ? t.noKeyTitle : isExpired ? t.burned : t.notFound}</h1>
-          <p className="text-text-muted text-sm">{isNoKey ? t.noKeyDesc : t.burnedDesc}</p>
+          <h1 className="text-xl font-semibold">{isExpired ? t.burned : t.notFound}</h1>
+          <p className="text-text-muted text-sm">{t.burnedDesc}</p>
           <button type="button" onClick={() => router.push('/')} className="px-4 py-2 rounded-xl bg-accent text-white hover:bg-accent-hover transition">
             {t.backHome}
           </button>
