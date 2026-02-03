@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useLang } from '@/components/LangProvider'
-import { Lock, Link2, Copy, Check } from 'lucide-react'
+import { DonateModal } from '@/components/DonateModal'
+import { Lock, Link2, Copy, Check, Heart } from 'lucide-react'
 
 type ExpiresIn = 'never' | '5min' | '1hour' | '1day'
 
@@ -19,6 +20,7 @@ export default function HomePage() {
     expiresAt: string | null
   } | null>(null)
   const [copied, setCopied] = useState(false)
+  const [donateOpen, setDonateOpen] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -179,7 +181,14 @@ export default function HomePage() {
         )}
       </main>
 
-      <footer className="border-t border-border/50 py-4 text-center text-text-muted text-sm">SnapLink — {t.tagline}</footer>
+      <footer className="border-t border-border/50 py-4 flex flex-col sm:flex-row items-center justify-center gap-2 text-text-muted text-sm">
+        <span>SnapLink — {t.tagline}</span>
+        <button type="button" onClick={() => setDonateOpen(true)} className="inline-flex items-center gap-1 text-accent hover:underline">
+          <Heart className="w-4 h-4" />
+          {t.donate}
+        </button>
+      </footer>
+      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
     </div>
   )
 }

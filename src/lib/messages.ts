@@ -29,6 +29,10 @@ export const messages = {
     lang: '语言',
     en: 'English',
     zh: '中文',
+    donate: '打赏',
+    donateTitle: '感谢支持',
+    donateDesc: '如果 SnapLink 对你有帮助，欢迎请我喝杯咖啡～',
+    donateLink: '前往打赏',
   },
   en: {
     title: 'SnapLink',
@@ -60,6 +64,10 @@ export const messages = {
     lang: 'Language',
     en: 'English',
     zh: '中文',
+    donate: 'Donate',
+    donateTitle: 'Thank you',
+    donateDesc: 'If SnapLink helped you, consider buying me a coffee.',
+    donateLink: 'Donate',
   },
 } as const
 
